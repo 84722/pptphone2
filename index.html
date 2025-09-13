@@ -2,220 +2,162 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>集团宣传册</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
   <style>
-    * {
+    html, body {
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
+      height: 100%;
+      background: #000;
+      overflow: hidden;
     }
-    
-    body {
-      background: #f5f5f5;
-      font-family: Arial, sans-serif;
-    }
-    
-    .controls {
-      background: #fff;
-      padding: 12px;
+    #upload-area {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
       align-items: center;
-      border-bottom: 1px solid #eee;
+      height: 100%;
+      color: white;
+      flex-direction: column;
     }
-    
-    .resolution-control {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .resolution-control label {
-      color: #666;
-      font-size: 14px;
-    }
-    
-    .resolution-slider {
-      width: 150px;
-    }
-    
-    .page-info {
-      color: #666;
-      font-size: 14px;
-    }
-    
     #viewer {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
       width: 100%;
-      text-align: center;
-      overflow-x: hidden;
+      background: #000;
+      position: relative;
     }
-    
-    .loading, .error, .performance-note {
-      padding: 20px;
-      text-align: center;
-    }
-    
-    .loading {
-      color: #666;
-    }
-    
-    .error {
-      color: #dc3545;
-    }
-    
-    .performance-note {
-      color: #ff9800;
-      background: #fff8e1;
-      font-size: 14px;
-    }
-    
-    canvas {
-      width: 100% !important;
-      height: auto !important;
-      margin-bottom: 8px;
-      background: #fff;
+    #slide {
+      max-width: 100%;
+      max-height: 100%;
       display: block;
+      margin: auto;
     }
+    .nav-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 3rem;
+      color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.3);
+      border: none;
+      cursor: pointer;
+      z-index: 10;
+      user-select: none;
+      padding: 10px;
+    }
+    #prevBtn { left: 10px; }
+    #nextBtn { right: 10px; }
   </style>
 </head>
 <body>
-  <div class="controls">
-    <div class="resolution-control">
-      <label for="resolution">清晰度:</label>
-      <input type="range" id="resolution" class="resolution-slider" min="1" max="4" value="2">
-    </div>
-    <div class="page-info" id="page-count">加载中...</div>
+  <div id="upload-area">
+    <h2>📂 上传 PDF 开始演示</h2>
+    <input type="file" id="fileInput" accept="application/pdf">
   </div>
-  
+
   <div id="viewer">
-    <div class="loading">正在加载PDF文件，请稍候...</div>
+    <img id="slide" alt="PPT 页面">
+    <button id="prevBtn" class="nav-btn">&#10094;</button>
+    <button id="nextBtn" class="nav-btn">&#10095;</button>
   </div>
 
   <script>
-    const url = "ttpdf.pdf";
-    const viewer = document.getElementById('viewer');
-    const resolutionSlider = document.getElementById('resolution');
-    const pageCountEl = document.getElementById('page-count');
     let pdfDoc = null;
-    let currentScaleFactor = 1;
-    
-    // 获取设备像素比
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    
-    // 性能提示
-    function showPerformanceNote() {
-      const note = document.createElement('div');
-      note.className = 'performance-note';
-      note.textContent = '提示：过高的清晰度可能导致页面加载缓慢或卡顿';
-      viewer.prepend(note);
-      
-      // 3秒后自动隐藏提示
-      setTimeout(() => {
-        note.style.opacity = '0';
-        note.style.transition = 'opacity 0.5s';
-        setTimeout(() => note.remove(), 500);
-      }, 3000);
-    }
-    
-    if (typeof pdfjsLib === 'undefined') {
-      viewer.innerHTML = '<div class="error">PDF查看器加载失败，请刷新页面重试</div>';
-    } else {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    let currentPage = 1;
+    let totalPages = 0;
+    let images = [];
 
-      // 加载PDF文档
-      pdfjsLib.getDocument(url).promise
-        .then(pdf => {
-          pdfDoc = pdf;
-          pageCountEl.textContent = `共 ${pdf.numPages} 页`;
-          renderAllPages();
-          
-          // 清晰度调节事件
-          resolutionSlider.addEventListener('input', () => {
-            currentScaleFactor = parseFloat(resolutionSlider.value);
-            renderAllPages();
-            if (currentScaleFactor > 2) {
-              showPerformanceNote();
-            }
-          });
-        })
-        .catch(err => {
-          console.error('PDF文件加载失败:', err);
-          let errorMessage = 'PDF文件加载失败，请检查网络连接或文件是否存在';
-          
-          if (err.name === 'MissingPDFException') {
-            errorMessage = '未找到PDF文件，请确认文件路径是否正确';
-          } else if (err.name === 'InvalidPDFException') {
-            errorMessage = 'PDF文件损坏或格式不正确';
-          } else if (err.message.includes('CORS')) {
-            errorMessage = '跨域访问被阻止，请检查服务器配置';
-          }
-          
-          viewer.innerHTML = `<div class="error">${errorMessage}</div>`;
-        });
-    }
-    
-    // 渲染所有页面
-    function renderAllPages() {
-      if (!pdfDoc) return;
-      
-      // 清空当前内容
-      viewer.innerHTML = '';
-      
-      // 计算缩放比例
-      const calculateScale = () => {
-        const screenWidth = window.innerWidth;
-        return pdfDoc.getPage(1).then(page => {
-          const originalWidth = page.getViewport({ scale: 1 }).width;
-          // 基础缩放比例 = 屏幕宽度 / PDF原始宽度
-          const baseScale = screenWidth / originalWidth;
-          // 综合设备像素比和用户选择的清晰度
-          return baseScale * devicePixelRatio * currentScaleFactor;
-        });
-      };
-      
-      calculateScale().then(scale => {
-        // 逐页渲染
-        for (let i = 1; i <= pdfDoc.numPages; i++) {
-          pdfDoc.getPage(i)
-            .then(page => {
-              const viewport = page.getViewport({ scale });
-              const canvas = document.createElement('canvas');
-              const context = canvas.getContext('2d');
-              
-              // 设置canvas实际尺寸（高分辨率）
+    const fileInput = document.getElementById("fileInput");
+    const uploadArea = document.getElementById("upload-area");
+    const viewer = document.getElementById("viewer");
+    const slide = document.getElementById("slide");
+
+    // 选择文件
+    fileInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (file && file.type === "application/pdf") {
+        const fileReader = new FileReader();
+        fileReader.onload = function() {
+          const typedarray = new Uint8Array(this.result);
+          loadPDF(typedarray);
+        };
+        fileReader.readAsArrayBuffer(file);
+      } else {
+        alert("请选择 PDF 文件！");
+      }
+    });
+
+    // 加载 PDF 并转成图片
+    function loadPDF(data) {
+      pdfjsLib.getDocument({ data }).promise.then(pdf => {
+        pdfDoc = pdf;
+        totalPages = pdf.numPages;
+        images = [];
+
+        const promises = [];
+        for (let i = 1; i <= totalPages; i++) {
+          promises.push(
+            pdf.getPage(i).then(page => {
+              const viewport = page.getViewport({ scale: 2 }); // scale 越大越清晰
+              const canvas = document.createElement("canvas");
+              const ctx = canvas.getContext("2d");
               canvas.width = viewport.width;
               canvas.height = viewport.height;
-              
-              // 显示尺寸（适应屏幕）
-              canvas.style.width = `${viewport.width / (devicePixelRatio * currentScaleFactor)}px`;
-              canvas.style.height = `${viewport.height / (devicePixelRatio * currentScaleFactor)}px`;
-              
-              canvas.title = `第 ${i} 页`;
-              viewer.appendChild(canvas);
-              
-              // 高质量渲染配置
-              const renderContext = {
-                canvasContext: context,
-                viewport: viewport,
-                // 启用抗锯齿
-                enableSmoothing: true
-              };
-              
-              return page.render(renderContext).promise;
+              return page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+                return canvas.toDataURL("image/png");
+              });
             })
-            .catch(err => {
-              console.error(`第${i}页渲染失败:`, err);
-              const errorEl = document.createElement('div');
-              errorEl.className = 'error';
-              errorEl.textContent = `第${i}页加载失败`;
-              viewer.appendChild(errorEl);
-            });
+          );
         }
+
+        Promise.all(promises).then(imgs => {
+          images = imgs;
+          uploadArea.style.display = "none";
+          viewer.style.display = "flex";
+          currentPage = 1;
+          showPage(currentPage);
+        });
       });
     }
+
+    // 显示页面
+    function showPage(num) {
+      slide.src = images[num - 1];
+    }
+
+    // 翻页按钮
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      if (currentPage > 1) {
+        currentPage--;
+        showPage(currentPage);
+      }
+    });
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      if (currentPage < totalPages) {
+        currentPage++;
+        showPage(currentPage);
+      }
+    });
+
+    // 手势滑动
+    let startX = 0;
+    document.addEventListener("touchstart", e => {
+      startX = e.touches[0].clientX;
+    });
+    document.addEventListener("touchend", e => {
+      let endX = e.changedTouches[0].clientX;
+      if (endX - startX > 50 && currentPage > 1) {
+        currentPage--;
+        showPage(currentPage);
+      } else if (startX - endX > 50 && currentPage < totalPages) {
+        currentPage++;
+        showPage(currentPage);
+      }
+    });
   </script>
 </body>
 </html>
