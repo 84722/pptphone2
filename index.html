@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>河北丰阳橡胶制品有限公司</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js"></script>
+  <script>
+    // 设置 PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+  </script>
   <style>
     html, body {
       margin: 0;
@@ -35,7 +41,7 @@
 <body>
   <div id="viewer"></div>
   <script>
-    const url = "ttpdt.pdf"; // PDF 文件路径
+    const url = "ttpdf.pdf"; // PDF 文件路径
     const viewer = document.getElementById('viewer');
 
     pdfjsLib.getDocument(url).promise.then(pdf => {
@@ -57,7 +63,7 @@
     });
 
     window.addEventListener('resize', () => {
-      location.reload(); // 手机旋转或调整窗口刷新渲染
+      location.reload();
     });
   </script>
 </body>
