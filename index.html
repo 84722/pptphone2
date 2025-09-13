@@ -2,12 +2,11 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <!-- 优化viewport设置，确保内容正确缩放 -->
+  <!-- 优化视口设置，确保高清显示 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>集团宣传册</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
-    /* 移除所有默认边距和内边距 */
     * {
       margin: 0;
       padding: 0;
@@ -17,38 +16,34 @@
     body {
       background: #f5f5f5;
       font-family: Arial, sans-serif;
-      /* 确保body占满屏幕高度 */
-      min-height: 100vh;
     }
     
     #viewer {
       width: 100%;
-      /* 移除最大宽度限制，允许占满屏幕 */
       text-align: center;
-      overflow-x: hidden; /* 防止横向滚动 */
+      overflow-x: hidden;
+    }
+    
+    .loading, .error {
+      padding: 40px 20px;
+      text-align: center;
     }
     
     .loading {
       color: #666;
-      padding: 40px 20px;
-      text-align: center;
     }
     
     .error {
       color: #dc3545;
-      padding: 40px 20px;
-      text-align: center;
     }
     
     canvas {
-      /* 关键：让canvas宽度100%适应屏幕，高度自动按比例计算 */
-      width: 100vw !important;
+      /* CSS宽度占满屏幕，实际像素由JS控制 */
+      width: 100% !important;
       height: auto !important;
-      margin-bottom: 8px; /* 仅保留页与页之间的小间距 */
+      margin-bottom: 8px;
       background: #fff;
-      /* 移除边框和阴影 */
-      box-shadow: none;
-      display: block; /* 防止canvas下方出现空隙 */
+      display: block;
     }
     
     .page-info {
@@ -64,41 +59,44 @@
     <div class="loading">正在加载PDF文件，请稍候...</div>
   </div>
   <script>
-    const url = "ttpdf.pdf"; // PDF文件路径
+    const url = "ttpdf.pdf";
     const viewer = document.getElementById('viewer');
 
     if (typeof pdfjsLib === 'undefined') {
       viewer.innerHTML = '<div class="error">PDF查看器加载失败，请刷新页面重试</div>';
     } else {
-      // 配置pdf.js工作器
       pdfjsLib.GlobalWorkerOptions.workerSrc = 
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-      // 加载并渲染PDF
+      // 获取设备像素比（解决高清屏模糊问题）
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      // 限制最大像素比（平衡清晰度和性能）
+      const maxPixelRatio = 2;
+      const effectivePixelRatio = Math.min(devicePixelRatio, maxPixelRatio);
+
       pdfjsLib.getDocument(url).promise
         .then(pdf => {
           viewer.innerHTML = '';
           
-          // 显示总页数信息（可选，可删除）
+          // 显示总页数
           const pageInfo = document.createElement('div');
           pageInfo.className = 'page-info';
           pageInfo.textContent = `共 ${pdf.numPages} 页`;
           viewer.appendChild(pageInfo);
           
-          // 自动计算适合屏幕的缩放比例
+          // 计算适合屏幕的缩放比例（考虑像素密度）
           const calculateScale = () => {
-            // 获取屏幕宽度（不包括滚动条）
             const screenWidth = window.innerWidth;
-            // 获取PDF第一页的原始宽度（72dpi下的宽度）
             return pdf.getPage(1).then(page => {
               const originalWidth = page.getViewport({ scale: 1 }).width;
-              // 计算缩放比例使PDF宽度匹配屏幕宽度
-              return screenWidth / originalWidth;
+              // 基础缩放比例（让PDF宽度适配屏幕）
+              const baseScale = screenWidth / originalWidth;
+              // 乘以像素比，提升高清屏清晰度
+              return baseScale * effectivePixelRatio;
             });
           };
           
           calculateScale().then(scale => {
-            // 逐页渲染
             for (let i = 1; i <= pdf.numPages; i++) {
               pdf.getPage(i)
                 .then(page => {
@@ -106,12 +104,15 @@
                   const canvas = document.createElement('canvas');
                   const context = canvas.getContext('2d');
                   
-                  // 设置canvas尺寸
-                  canvas.height = viewport.height;
+                  // 关键优化：设置canvas实际像素尺寸（乘以像素比）
                   canvas.width = viewport.width;
-                  canvas.title = `第 ${i} 页`;
+                  canvas.height = viewport.height;
                   
-                  // 添加到页面
+                  // CSS尺寸保持100%，让高像素canvas压缩显示，提升清晰度
+                  canvas.style.width = `${viewport.width / effectivePixelRatio}px`;
+                  canvas.style.height = `${viewport.height / effectivePixelRatio}px`;
+                  
+                  canvas.title = `第 ${i} 页`;
                   viewer.appendChild(canvas);
                   
                   // 渲染页面
