@@ -13,16 +13,8 @@
       background: #000;
       overflow: hidden;
     }
-    #upload-area {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100%;
-      color: white;
-      flex-direction: column;
-    }
     #viewer {
-      display: none;
+      display: flex;
       justify-content: center;
       align-items: center;
       height: 100%;
@@ -54,11 +46,6 @@
   </style>
 </head>
 <body>
-  <div id="upload-area">
-    <h2>📂 上传 PDF 开始演示</h2>
-    <input type="file" id="fileInput" accept="application/pdf">
-  </div>
-
   <div id="viewer">
     <img id="slide" alt="PPT 页面">
     <button id="prevBtn" class="nav-btn">&#10094;</button>
@@ -71,58 +58,40 @@
     let totalPages = 0;
     let images = [];
 
-    const fileInput = document.getElementById("fileInput");
-    const uploadArea = document.getElementById("upload-area");
     const viewer = document.getElementById("viewer");
     const slide = document.getElementById("slide");
 
-    // 选择文件
-    fileInput.addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file && file.type === "application/pdf") {
-        const fileReader = new FileReader();
-        fileReader.onload = function() {
-          const typedarray = new Uint8Array(this.result);
-          loadPDF(typedarray);
-        };
-        fileReader.readAsArrayBuffer(file);
-      } else {
-        alert("请选择 PDF 文件！");
-      }
-    });
+    // PDF 文件路径（放在和 HTML 同一目录）
+    const url = "ttpdf.pdf";
 
     // 加载 PDF 并转成图片
-    function loadPDF(data) {
-      pdfjsLib.getDocument({ data }).promise.then(pdf => {
-        pdfDoc = pdf;
-        totalPages = pdf.numPages;
-        images = [];
+    pdfjsLib.getDocument(url).promise.then(pdf => {
+      pdfDoc = pdf;
+      totalPages = pdf.numPages;
+      images = [];
 
-        const promises = [];
-        for (let i = 1; i <= totalPages; i++) {
-          promises.push(
-            pdf.getPage(i).then(page => {
-              const viewport = page.getViewport({ scale: 2 }); // scale 越大越清晰
-              const canvas = document.createElement("canvas");
-              const ctx = canvas.getContext("2d");
-              canvas.width = viewport.width;
-              canvas.height = viewport.height;
-              return page.render({ canvasContext: ctx, viewport }).promise.then(() => {
-                return canvas.toDataURL("image/png");
-              });
-            })
-          );
-        }
+      const promises = [];
+      for (let i = 1; i <= totalPages; i++) {
+        promises.push(
+          pdf.getPage(i).then(page => {
+            const viewport = page.getViewport({ scale: 2 }); // scale 越大越清晰
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            return page.render({ canvasContext: ctx, viewport }).promise.then(() => {
+              return canvas.toDataURL("image/png");
+            });
+          })
+        );
+      }
 
-        Promise.all(promises).then(imgs => {
-          images = imgs;
-          uploadArea.style.display = "none";
-          viewer.style.display = "flex";
-          currentPage = 1;
-          showPage(currentPage);
-        });
+      Promise.all(promises).then(imgs => {
+        images = imgs;
+        currentPage = 1;
+        showPage(currentPage);
       });
-    }
+    });
 
     // 显示页面
     function showPage(num) {
