@@ -2,8 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <!-- 优化视口设置，确保高清显示 -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>集团宣传册</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <style>
@@ -18,14 +17,43 @@
       font-family: Arial, sans-serif;
     }
     
+    .controls {
+      background: #fff;
+      padding: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .resolution-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .resolution-control label {
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .resolution-slider {
+      width: 150px;
+    }
+    
+    .page-info {
+      color: #666;
+      font-size: 14px;
+    }
+    
     #viewer {
       width: 100%;
       text-align: center;
       overflow-x: hidden;
     }
     
-    .loading, .error {
-      padding: 40px 20px;
+    .loading, .error, .performance-note {
+      padding: 20px;
       text-align: center;
     }
     
@@ -37,99 +65,79 @@
       color: #dc3545;
     }
     
+    .performance-note {
+      color: #ff9800;
+      background: #fff8e1;
+      font-size: 14px;
+    }
+    
     canvas {
-      /* CSS宽度占满屏幕，实际像素由JS控制 */
       width: 100% !important;
       height: auto !important;
       margin-bottom: 8px;
       background: #fff;
       display: block;
     }
-    
-    .page-info {
-      color: #666;
-      padding: 10px;
-      text-align: center;
-      background: #fff;
-    }
   </style>
 </head>
 <body>
+  <div class="controls">
+    <div class="resolution-control">
+      <label for="resolution">清晰度:</label>
+      <input type="range" id="resolution" class="resolution-slider" min="1" max="4" value="2">
+    </div>
+    <div class="page-info" id="page-count">加载中...</div>
+  </div>
+  
   <div id="viewer">
     <div class="loading">正在加载PDF文件，请稍候...</div>
   </div>
+
   <script>
     const url = "ttpdf.pdf";
     const viewer = document.getElementById('viewer');
-
+    const resolutionSlider = document.getElementById('resolution');
+    const pageCountEl = document.getElementById('page-count');
+    let pdfDoc = null;
+    let currentScaleFactor = 1;
+    
+    // 获取设备像素比
+    const devicePixelRatio = window.devicePixelRatio || 1;
+    
+    // 性能提示
+    function showPerformanceNote() {
+      const note = document.createElement('div');
+      note.className = 'performance-note';
+      note.textContent = '提示：过高的清晰度可能导致页面加载缓慢或卡顿';
+      viewer.prepend(note);
+      
+      // 3秒后自动隐藏提示
+      setTimeout(() => {
+        note.style.opacity = '0';
+        note.style.transition = 'opacity 0.5s';
+        setTimeout(() => note.remove(), 500);
+      }, 3000);
+    }
+    
     if (typeof pdfjsLib === 'undefined') {
       viewer.innerHTML = '<div class="error">PDF查看器加载失败，请刷新页面重试</div>';
     } else {
       pdfjsLib.GlobalWorkerOptions.workerSrc = 
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-      // 获取设备像素比（解决高清屏模糊问题）
-      const devicePixelRatio = window.devicePixelRatio || 1;
-      // 限制最大像素比（平衡清晰度和性能）
-      const maxPixelRatio = 2;
-      const effectivePixelRatio = Math.min(devicePixelRatio, maxPixelRatio);
-
+      // 加载PDF文档
       pdfjsLib.getDocument(url).promise
         .then(pdf => {
-          viewer.innerHTML = '';
+          pdfDoc = pdf;
+          pageCountEl.textContent = `共 ${pdf.numPages} 页`;
+          renderAllPages();
           
-          // 显示总页数
-          const pageInfo = document.createElement('div');
-          pageInfo.className = 'page-info';
-          pageInfo.textContent = `共 ${pdf.numPages} 页`;
-          viewer.appendChild(pageInfo);
-          
-          // 计算适合屏幕的缩放比例（考虑像素密度）
-          const calculateScale = () => {
-            const screenWidth = window.innerWidth;
-            return pdf.getPage(1).then(page => {
-              const originalWidth = page.getViewport({ scale: 1 }).width;
-              // 基础缩放比例（让PDF宽度适配屏幕）
-              const baseScale = screenWidth / originalWidth;
-              // 乘以像素比，提升高清屏清晰度
-              return baseScale * effectivePixelRatio;
-            });
-          };
-          
-          calculateScale().then(scale => {
-            for (let i = 1; i <= pdf.numPages; i++) {
-              pdf.getPage(i)
-                .then(page => {
-                  const viewport = page.getViewport({ scale });
-                  const canvas = document.createElement('canvas');
-                  const context = canvas.getContext('2d');
-                  
-                  // 关键优化：设置canvas实际像素尺寸（乘以像素比）
-                  canvas.width = viewport.width;
-                  canvas.height = viewport.height;
-                  
-                  // CSS尺寸保持100%，让高像素canvas压缩显示，提升清晰度
-                  canvas.style.width = `${viewport.width / effectivePixelRatio}px`;
-                  canvas.style.height = `${viewport.height / effectivePixelRatio}px`;
-                  
-                  canvas.title = `第 ${i} 页`;
-                  viewer.appendChild(canvas);
-                  
-                  // 渲染页面
-                  const renderContext = {
-                    canvasContext: context,
-                    viewport: viewport
-                  };
-                  
-                  return page.render(renderContext).promise;
-                })
-                .catch(err => {
-                  console.error(`第${i}页渲染失败:`, err);
-                  const errorEl = document.createElement('div');
-                  errorEl.className = 'error';
-                  errorEl.textContent = `第${i}页加载失败`;
-                  viewer.appendChild(errorEl);
-                });
+          // 清晰度调节事件
+          resolutionSlider.addEventListener('input', () => {
+            currentScaleFactor = parseFloat(resolutionSlider.value);
+            renderAllPages();
+            if (currentScaleFactor > 2) {
+              showPerformanceNote();
             }
           });
         })
@@ -147,6 +155,66 @@
           
           viewer.innerHTML = `<div class="error">${errorMessage}</div>`;
         });
+    }
+    
+    // 渲染所有页面
+    function renderAllPages() {
+      if (!pdfDoc) return;
+      
+      // 清空当前内容
+      viewer.innerHTML = '';
+      
+      // 计算缩放比例
+      const calculateScale = () => {
+        const screenWidth = window.innerWidth;
+        return pdfDoc.getPage(1).then(page => {
+          const originalWidth = page.getViewport({ scale: 1 }).width;
+          // 基础缩放比例 = 屏幕宽度 / PDF原始宽度
+          const baseScale = screenWidth / originalWidth;
+          // 综合设备像素比和用户选择的清晰度
+          return baseScale * devicePixelRatio * currentScaleFactor;
+        });
+      };
+      
+      calculateScale().then(scale => {
+        // 逐页渲染
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          pdfDoc.getPage(i)
+            .then(page => {
+              const viewport = page.getViewport({ scale });
+              const canvas = document.createElement('canvas');
+              const context = canvas.getContext('2d');
+              
+              // 设置canvas实际尺寸（高分辨率）
+              canvas.width = viewport.width;
+              canvas.height = viewport.height;
+              
+              // 显示尺寸（适应屏幕）
+              canvas.style.width = `${viewport.width / (devicePixelRatio * currentScaleFactor)}px`;
+              canvas.style.height = `${viewport.height / (devicePixelRatio * currentScaleFactor)}px`;
+              
+              canvas.title = `第 ${i} 页`;
+              viewer.appendChild(canvas);
+              
+              // 高质量渲染配置
+              const renderContext = {
+                canvasContext: context,
+                viewport: viewport,
+                // 启用抗锯齿
+                enableSmoothing: true
+              };
+              
+              return page.render(renderContext).promise;
+            })
+            .catch(err => {
+              console.error(`第${i}页渲染失败:`, err);
+              const errorEl = document.createElement('div');
+              errorEl.className = 'error';
+              errorEl.textContent = `第${i}页加载失败`;
+              viewer.appendChild(errorEl);
+            });
+        }
+      });
     }
   </script>
 </body>
